@@ -2,10 +2,12 @@ use clap::Parser;
 use colored::*;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use indicatif::{ProgressBar, ProgressStyle};
+use rand::RngCore;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rayon::prelude::*;
 use serde::Serialize;
+use sha2::{Digest, Sha512};
 use std::fs;
 use std::io::Error;
 use std::sync::Arc;
@@ -135,8 +137,7 @@ fn print_banner() {
             .bold()
     );
     eprintln!(
-        "{}
-",
+        "{}\n",
         "=============================================".bright_purple()
     );
 }
@@ -248,7 +249,7 @@ struct KeyResult {
     #[allow(dead_code)]
     verifying_key: VerifyingKey,
     public_key_hex: String,
-    private_key_hex: String, // Storing hex directly now
+    private_key_hex: String,
 }
 
 fn perform_parallel_search(
@@ -267,9 +268,7 @@ fn perform_parallel_search(
                 return None;
             }
 
-            // Correct generation using library standard
-            let signing_key = SigningKey::generate(&mut rng);
-            let verifying_key = signing_key.verifying_key();
+            let (signing_key, verifying_key, rfc8032_private_key) = generate_ed25519_key(&mut rng);
 
             // Fast prefix check
             let key_bytes = verifying_key.as_bytes();
@@ -300,8 +299,7 @@ fn perform_parallel_search(
                 local_found.store(true, Ordering::Relaxed);
 
                 let public_key_hex = hex::encode(key_bytes);
-                // Private key is the 32-byte seed
-                let private_key_hex = hex::encode(signing_key.to_bytes());
+                let private_key_hex = hex::encode(rfc8032_private_key);
 
                 return Some(KeyResult {
                     signing_key,
@@ -312,6 +310,38 @@ fn perform_parallel_search(
             }
         }
     })
+}
+
+#[inline(always)]
+fn generate_ed25519_key<R: RngCore>(rng: &mut R) -> (SigningKey, VerifyingKey, [u8; 64]) {
+    // RFC 8032 Ed25519 key generation (MeshCore compliant)
+
+    // 1. Generate 32-byte random seed
+    let mut seed = [0u8; 32];
+    rng.fill_bytes(&mut seed);
+
+    // 2. Hash the seed with SHA-512 to get 64 bytes
+    let mut hasher = Sha512::new();
+    hasher.update(seed);
+    let digest = hasher.finalize();
+
+    // 3. Clamp the first 32 bytes
+    let mut clamped = [0u8; 32];
+    clamped.copy_from_slice(&digest[..32]);
+    clamped[0] &= 248;
+    clamped[31] &= 63;
+    clamped[31] |= 64;
+
+    // 4. Create the signing key
+    let signing_key = SigningKey::from_bytes(&clamped);
+    let verifying_key = signing_key.verifying_key();
+
+    // 5. Create 64-byte RFC 8032 private key [clamped][hash_remainder]
+    let mut rfc8032_private_key = [0u8; 64];
+    rfc8032_private_key[..32].copy_from_slice(&clamped);
+    rfc8032_private_key[32..].copy_from_slice(&digest[32..]);
+
+    (signing_key, verifying_key, rfc8032_private_key)
 }
 
 fn handle_success(
@@ -338,7 +368,7 @@ fn handle_success(
         println!("{}:", "Public Key".cyan().bold());
         println!("{}", result.public_key_hex.to_uppercase().white());
 
-        println!("\n{}:", "Private Key (Seed)".cyan().bold());
+        println!("\n{}:", "Private Key".cyan().bold());
         println!("{}", result.private_key_hex.to_uppercase().white());
         println!(
             "{}",
