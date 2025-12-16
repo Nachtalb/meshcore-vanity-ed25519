@@ -2,15 +2,15 @@ use clap::Parser;
 use colored::*;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use indicatif::{ProgressBar, ProgressStyle};
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use rayon::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha512};
 use std::fs;
 use std::io::Error;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -119,14 +119,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 // --- Helper Functions ---
 
 fn print_banner() {
-    eprintln!("{}", "=============================================".bright_purple());
-    eprintln!("{}", "       Vanity Ed25519 Key Generator          ".bright_purple().bold());
-    eprintln!("{}\n", "=============================================".bright_purple());
+    eprintln!(
+        "{}",
+        "=============================================".bright_purple()
+    );
+    eprintln!(
+        "{}",
+        "       Vanity Ed25519 Key Generator          "
+            .bright_purple()
+            .bold()
+    );
+    eprintln!(
+        "{}\n",
+        "=============================================".bright_purple()
+    );
 }
 
 fn validate_prefix(prefix: &str) -> Result<(), Box<dyn std::error::Error>> {
     if !is_prefix_valid(prefix) {
-        eprintln!("{}", "❌ Prefix must contain only hexadecimal characters (0-9, a-f)".red().bold());
+        eprintln!(
+            "{}",
+            "❌ Prefix must contain only hexadecimal characters (0-9, a-f)"
+                .red()
+                .bold()
+        );
         return Err(format!("Invalid prefix: {}", prefix).into());
     }
     Ok(())
@@ -201,13 +217,12 @@ fn spawn_progress_monitor(
 
 // Convert hex string to nibbles (0-15)
 fn hex_string_to_nibbles(hex: &str) -> Vec<u8> {
-    hex.chars()
-        .map(|c| c.to_digit(16).unwrap() as u8)
-        .collect()
+    hex.chars().map(|c| c.to_digit(16).unwrap() as u8).collect()
 }
 
 struct KeyResult {
-    #[allow(dead_code)] // Used in original logic logic but maybe not all fields needed for output directly, keeping for consistency
+    #[allow(dead_code)]
+    // Used in original logic logic but maybe not all fields needed for output directly, keeping for consistency
     signing_key: SigningKey,
     #[allow(dead_code)]
     verifying_key: VerifyingKey,
@@ -230,20 +245,15 @@ fn perform_parallel_search(
                 return None;
             }
 
-            let (signing_key, verifying_key, rfc8032_private_key) =
-                generate_ed25519_key(&mut rng);
+            let (signing_key, verifying_key, rfc8032_private_key) = generate_ed25519_key(&mut rng);
 
             // Fast prefix check using nibbles
             let key_bytes = verifying_key.as_bytes();
             let mut matches = true;
             for (i, &nibble) in target_nibbles.iter().enumerate() {
                 let byte = key_bytes[i / 2];
-                let key_nibble = if i % 2 == 0 {
-                    byte >> 4
-                } else {
-                    byte & 0x0F
-                };
-                
+                let key_nibble = if i % 2 == 0 { byte >> 4 } else { byte & 0x0F };
+
                 if key_nibble != nibble {
                     matches = false;
                     break;
@@ -270,7 +280,7 @@ fn perform_parallel_search(
 #[inline(always)]
 fn generate_ed25519_key(rng: &mut OsRng) -> (SigningKey, VerifyingKey, [u8; 64]) {
     // RFC 8032 Ed25519 key generation
-    
+
     // 1. Generate 32-byte random seed
     let mut seed = [0u8; 32];
     rng.fill_bytes(&mut seed);
@@ -283,9 +293,9 @@ fn generate_ed25519_key(rng: &mut OsRng) -> (SigningKey, VerifyingKey, [u8; 64])
     // 3. Clamp the first 32 bytes
     let mut clamped = [0u8; 32];
     clamped.copy_from_slice(&digest[..32]);
-    clamped[0] &= 248; 
-    clamped[31] &= 63; 
-    clamped[31] |= 64; 
+    clamped[0] &= 248;
+    clamped[31] &= 63;
+    clamped[31] |= 64;
 
     // 4. Create the signing key
     let signing_key = SigningKey::from_bytes(&clamped);
@@ -297,11 +307,7 @@ fn generate_ed25519_key(rng: &mut OsRng) -> (SigningKey, VerifyingKey, [u8; 64])
     rfc8032_private_key[..32].copy_from_slice(&clamped);
     rfc8032_private_key[32..].copy_from_slice(&digest[32..]);
 
-    (
-        signing_key,
-        verifying_key,
-        rfc8032_private_key,
-    )
+    (signing_key, verifying_key, rfc8032_private_key)
 }
 
 fn handle_success(
@@ -331,11 +337,14 @@ fn handle_success(
         // we usually want it all together. But if the user redirects stdout, they get the keys.
         // Let's split it: Keys to stdout, Stats to stderr.
         // But the box wraps them.
-        
+
         if !args.quiet {
             eprintln!("\n{}", "✓ Key Generated Successfully!".bold().green());
             // Stats to stderr
-            eprintln!("{}", "=============================================".bright_black());
+            eprintln!(
+                "{}",
+                "=============================================".bright_black()
+            );
         }
 
         // Keys to stdout (so they can be captured)
@@ -343,28 +352,34 @@ fn handle_success(
         // We will print the keys to stdout.
         if !args.quiet {
             // Label
-             // If we print labels to stderr, and keys to stdout, they might desynchronize visually.
-             // But let's assume standard usage.
-             // "Public Key:"
+            // If we print labels to stderr, and keys to stdout, they might desynchronize visually.
+            // But let's assume standard usage.
+            // "Public Key:"
         }
-        
+
         // Actually, the user asked for "default output (progressbar etc) is output to stderr".
         // "so that we can still have that output together with --json output which goes to stdout".
         // This implies specifically for JSON mode.
         // For non-JSON mode, usually everything goes to stdout or everything to stderr except the "data".
         // Let's stick to: ALL Logs/Progress -> Stderr.
         // Final Result -> Stdout.
-        
+
         // For the "Beautiful Box", it is the result. So it goes to Stdout.
-        // The stats (Attempts/Time) are metadata. 
-        
-        println!("{}", "=============================================".bright_black());
+        // The stats (Attempts/Time) are metadata.
+
+        println!(
+            "{}",
+            "=============================================".bright_black()
+        );
         println!("{}:", "Public Key".cyan().bold());
         println!("{}", result.public_key_hex.to_uppercase().white());
-        
+
         println!("\n{}:", "Private Key".cyan().bold());
         println!("{}", private_key_hex.to_uppercase().white());
-        println!("{}", "=============================================".bright_black());
+        println!(
+            "{}",
+            "=============================================".bright_black()
+        );
 
         if !args.quiet {
             // Validation and Stats to stderr
@@ -373,10 +388,11 @@ fn handle_success(
                 "{}",
                 "✓ RFC 8032 Ed25519 compliant - Proper SHA-512 expansion, scalar clamping, and key consistency verified".green()
             );
-            
+
             let attempts_str = format_number(total_attempts);
             let time_str = format!("{:.1}s", elapsed.as_secs_f64());
-            let keys_per_sec = format_number((total_attempts as f64 / elapsed.as_secs_f64()) as u64);
+            let keys_per_sec =
+                format_number((total_attempts as f64 / elapsed.as_secs_f64()) as u64);
 
             eprintln!(
                 "{} {} {} {} {} {}",
@@ -399,7 +415,11 @@ fn handle_success(
         ) {
             Ok(_) => {
                 if !args.quiet {
-                    eprintln!("\n{} {}", "💾 Key pair saved to:".bold(), output_filename.green())
+                    eprintln!(
+                        "\n{} {}",
+                        "💾 Key pair saved to:".bold(),
+                        output_filename.green()
+                    )
                 }
             }
             Err(e) => {
