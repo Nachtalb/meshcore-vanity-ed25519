@@ -1,6 +1,5 @@
 use clap::Parser;
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use hex;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::RngCore;
 use rand::rngs::OsRng;
@@ -8,6 +7,7 @@ use rayon::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha512};
 use std::fs;
+use std::io::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -28,7 +28,12 @@ struct Args {
     output: Option<String>,
 }
 
-fn main() {
+fn is_prefix_valid(prefix: &str) -> bool {
+    let valid_chars = "0123456789abcdefABCDEF";
+    prefix.chars().all(|c| valid_chars.contains(c))
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     // Normalize the prefix
@@ -37,6 +42,11 @@ fn main() {
     } else {
         args.prefix.to_lowercase()
     };
+
+    if !is_prefix_valid(&prefix) {
+        println!("❌ Prefix must contain only hexadecimal characters (0-9, a-f)");
+        return Err(format!("Invalid prefix: {}", prefix).into());
+    }
 
     println!("🔍 Searching for Ed25519 key with prefix: {}", prefix);
     println!("🖥️  Using {} CPU cores", num_cpus::get());
@@ -129,7 +139,7 @@ fn main() {
 
                 // 2. Hash the seed with SHA-512 to get 64 bytes
                 let mut hasher = Sha512::new();
-                hasher.update(&seed);
+                hasher.update(seed);
                 let digest = hasher.finalize();
 
                 // 3. Clamp the first 32 bytes (scalar clamping)
@@ -212,13 +222,19 @@ fn main() {
                 &private_key_hex.to_uppercase(),
             ) {
                 Ok(_) => println!("\n💾 Key pair saved to: {}", output_filename),
-                Err(e) => eprintln!("\n⚠️  Failed to save key pair: {}", e),
+                Err(e) => {
+                    eprintln!("\n⚠️  Failed to save key pair: {}", e);
+                    return Err("Failed to save key pair".into());
+                }
             }
         }
         None => {
             println!("\n❌ Search was interrupted");
+            return Err("Search interrupted".into());
         }
     }
+
+    Ok(())
 }
 
 fn format_number(n: u64) -> String {
@@ -245,8 +261,7 @@ fn save_keypair_json(filename: &str, public_key: &str, private_key: &str) -> std
         private_key: private_key.to_string(),
     };
 
-    let json_data = serde_json::to_string_pretty(&keypair)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let json_data = serde_json::to_string_pretty(&keypair).map_err(Error::other)?;
 
     fs::write(filename, json_data)?;
     Ok(())
