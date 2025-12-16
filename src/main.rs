@@ -2,15 +2,15 @@ use clap::Parser;
 use colored::*;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use indicatif::{ProgressBar, ProgressStyle};
-use rand::rngs::OsRng;
-use rand::RngCore;
+use rand::rngs::StdRng;
+use rand::{RngCore, SeedableRng};
 use rayon::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha512};
 use std::fs;
 use std::io::Error;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -131,7 +131,8 @@ fn print_banner() {
             .bold()
     );
     eprintln!(
-        "{}\n",
+        "{}
+",
         "=============================================".bright_purple()
     );
 }
@@ -237,7 +238,8 @@ fn perform_parallel_search(
     found: &Arc<AtomicBool>,
 ) -> Option<KeyResult> {
     (0..num_cpus::get()).into_par_iter().find_map_any(|_| {
-        let mut rng = OsRng;
+        // Initialize StdRng from entropy once per thread
+        let mut rng = StdRng::from_entropy();
         let local_attempts = Arc::clone(attempts);
         let local_found = Arc::clone(found);
 
@@ -279,7 +281,7 @@ fn perform_parallel_search(
 }
 
 #[inline(always)]
-fn generate_ed25519_key(rng: &mut OsRng) -> (SigningKey, VerifyingKey, [u8; 64]) {
+fn generate_ed25519_key<R: RngCore>(rng: &mut R) -> (SigningKey, VerifyingKey, [u8; 64]) {
     // RFC 8032 Ed25519 key generation
 
     // 1. Generate 32-byte random seed
@@ -349,7 +351,7 @@ fn handle_success(
     if !args.quiet {
         eprintln!("\n{}", "✓ Key Generated Successfully!".bold().green());
         // Removed the extra horizontal line here to avoid double lines in human output
-        
+
         eprintln!("\n{}", "Validation Status:".yellow().bold());
         eprintln!(
             "{}",
@@ -358,8 +360,7 @@ fn handle_success(
 
         let attempts_str = format_number(total_attempts);
         let time_str = format!("{:.1}s", elapsed.as_secs_f64());
-        let keys_per_sec =
-            format_number((total_attempts as f64 / elapsed.as_secs_f64()) as u64);
+        let keys_per_sec = format_number((total_attempts as f64 / elapsed.as_secs_f64()) as u64);
 
         eprintln!(
             "{} {} {} {} {} {}",
