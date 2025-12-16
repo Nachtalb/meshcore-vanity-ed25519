@@ -9,8 +9,9 @@ Designed to produce keys compatible with **MeshCore** requirements (64-byte priv
 | Tool | Speed (approx.) | System |
 |------|-----------------|--------|
 | [Web Generator](https://gessaman.com/mc-keygen/) | ~8,000 keys/sec | Microsoft Edge 143.0.3650.66, 13th Gen Intel(R) Core(TM) i9-13950HX, 32 CPU threads, 30GiB RAM, Linux |
-| **vanity_ed25519** | **~650,000+ keys/sec** | 13th Gen Intel(R) Core(TM) i9-13950HX, 32 CPU threads, 30GiB RAM, Linux, rustc 1.92.0 |
-| **vanity_ed25519** | **~1,500,000+ keys/sec** | AMD Ryzen 9 7950X 16-Core Processor, 32 CPU threads, 30GiB RAM, Arch Linux, rustc 1.92.0 |
+| vanity_ed25519 | ~700,000+ keys/sec | 13th Gen Intel(R) Core(TM) i9-13950HX, 32 CPU threads, 30GiB RAM, Linux, rustc 1.92.0 |
+| vanity_ed25519 | ~1,500,000+ keys/sec | AMD Ryzen 9 7950X 16-Core Processor, 32 CPU threads, 30GiB RAM, Arch Linux (WSL2), rustc 1.92.0 |
+| **vanity_ed25519** | **~1,600,000+ keys/sec** | **AMD Ryzen 9 7950X 16-Core Processor, 32 CPU threads, 30GiB RAM, Windows 11, rustc 1.92.0** |
 
 
 This tool utilizes:
