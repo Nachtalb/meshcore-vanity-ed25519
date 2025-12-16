@@ -24,7 +24,7 @@ This tool utilizes:
 Ensure you have [Rust installed](https://rustup.rs/).
 
 ```bash
-git clone https://github.com/your-username/vanity_ed25519.git
+git clone https://github.com/Nachtalb/meshcore-vanity-ed25519.git
 cd vanity_ed25519
 
 # Build and install locally
