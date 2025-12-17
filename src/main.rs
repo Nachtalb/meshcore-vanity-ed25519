@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(bar) = pb {
         // Kept visible as requested
-        bar.finish();
+        bar.abandon();
     }
 
     let elapsed = start_time.elapsed();
