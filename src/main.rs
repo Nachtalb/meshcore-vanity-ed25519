@@ -76,6 +76,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "📊 Estimated attempts needed:".bold().blue(),
             format!("~{}", format_number(estimated_attempts)).yellow()
         );
+        if estimated_attempts > u64::MAX as u128 {
+            eprintln!(
+                "{}",
+                "🍺 If you find this key, I will personally fly out to you and give you a free drink!"
+                    .red()
+                    .bold()
+            );
+        }
         eprintln!("{}", "⏱️  Starting search...\n".bold().green());
     }
 
@@ -86,7 +94,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Only set up progress bar if not in quiet mode
     let pb = if !quiet {
-        Some(setup_progress_bar(estimated_attempts))
+        Some(setup_progress_bar(
+            if estimated_attempts > u64::MAX as u128 {
+                0
+            } else {
+                estimated_attempts as u64
+            },
+        ))
     } else {
         None
     };
@@ -155,8 +169,8 @@ fn validate_prefix(prefix: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn calculate_estimated_attempts(prefix_len: usize) -> u64 {
-    16_u64.pow(prefix_len as u32)
+fn calculate_estimated_attempts(prefix_len: usize) -> u128 {
+    16_u128.pow(prefix_len as u32)
 }
 
 fn initialize_shared_state() -> (Arc<AtomicBool>, Arc<AtomicU64>) {
@@ -185,12 +199,14 @@ fn spawn_progress_monitor(
     pb: Option<ProgressBar>,
     attempts: Arc<AtomicU64>,
     found: Arc<AtomicBool>,
-    initial_estimate: u64,
+    initial_estimate: u128,
 ) -> JoinHandle<()> {
     std::thread::spawn(move || {
-        let mut last_update_time = Instant::now();
-        let mut last_attempts = 0u64;
-        let mut current_total = initial_estimate;
+        let mut current_total = if initial_estimate > u64::MAX as u128 {
+            0
+        } else {
+            initial_estimate as u64
+        };
         let mut first_change = true;
 
         while !found.load(Ordering::Relaxed) {
@@ -198,7 +214,7 @@ fn spawn_progress_monitor(
 
             if let Some(ref bar) = pb {
                 // Update total if we exceed initial estimate
-                if current > current_total {
+                if current_total != 0 && current > current_total {
                     current_total = current; // Add 10% buffer
                     bar.set_length(current_total);
                     if first_change {
@@ -208,19 +224,6 @@ fn spawn_progress_monitor(
                 }
 
                 bar.set_position(current);
-
-                // Recalculate ETA every second based on actual rate
-                if last_update_time.elapsed() >= Duration::from_secs(1) {
-                    let rate =
-                        (current - last_attempts) as f64 / last_update_time.elapsed().as_secs_f64();
-                    if rate > 0.0 && current < current_total {
-                        let remaining = current_total - current;
-                        let eta_secs = (remaining as f64 / rate) as u64;
-                        bar.set_message(format!("~{}s remaining", eta_secs));
-                    }
-                    last_attempts = current;
-                    last_update_time = Instant::now();
-                }
             }
 
             std::thread::sleep(Duration::from_millis(100));
@@ -390,9 +393,9 @@ fn handle_success(
             "✓ RFC 8032 Ed25519 compliant - Proper SHA-512 expansion, scalar clamping, and key consistency verified".green()
         );
 
-        let attempts_str = format_number(total_attempts);
+        let attempts_str = format_number(total_attempts as u128);
         let time_str = format!("{:.1}s", elapsed.as_secs_f64());
-        let keys_per_sec = format_number((total_attempts as f64 / elapsed.as_secs_f64()) as u64);
+        let keys_per_sec = format_number((total_attempts as f64 / elapsed.as_secs_f64()) as u128);
 
         eprintln!(
             "{} {} {} {} {} {}",
@@ -430,7 +433,7 @@ fn handle_success(
     Ok(())
 }
 
-fn format_number(n: u64) -> String {
+fn format_number(n: u128) -> String {
     let s = n.to_string();
     let mut result = String::new();
     for (i, c) in s.chars().rev().enumerate() {
