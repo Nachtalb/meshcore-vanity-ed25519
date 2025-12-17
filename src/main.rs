@@ -171,10 +171,11 @@ fn setup_progress_bar(len: u64) -> ProgressBar {
     pb.set_style(
         ProgressStyle::default_bar()
             .template(
-                "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) | {per_sec} | ETA: {eta}"
+                "{spinner:.green} [{elapsed_precise}] [{bar:40.yellow/white}] {pos}/{len} ({percent}%) | {per_sec} | ETA: {eta}"
             )
             .unwrap()
-            .progress_chars("#>- ")
+            .progress_chars(" 𜱭∙")
+
     );
     // indicatif defaults to stderr, which is what we want
     pb
@@ -190,6 +191,7 @@ fn spawn_progress_monitor(
         let mut last_update_time = Instant::now();
         let mut last_attempts = 0u64;
         let mut current_total = initial_estimate;
+        let mut first_change = true;
 
         while !found.load(Ordering::Relaxed) {
             let current = attempts.load(Ordering::Relaxed);
@@ -199,6 +201,10 @@ fn spawn_progress_monitor(
                 if current > current_total {
                     current_total = current; // Add 10% buffer
                     bar.set_length(current_total);
+                    if first_change {
+                        bar.set_style(bar.style().progress_chars("= "));
+                        first_change = false;
+                    }
                 }
 
                 bar.set_position(current);
